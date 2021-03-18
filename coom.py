@@ -68,13 +68,15 @@ print("Extracting Scene.pck...", end="")
 #input()
 print("DONE")
 
-print("Reading .ss files", end="")
+print("Reading .ss files...", end="")
 ssFiles = list()
 for file in os.listdir("tmpcoom\\"):
     if(file[-1] == 's' and file[-2] == 's' and file[-3] == '.'):
-        ssFiles.append(file[0:-3])
-        os.system("tools\\ssdump.exe tmpcoom\\" + file + " tmpcoom\\" + file[0:-3] + ".txt")
         print(".", end="", flush=True)
+        if(os.path.isfile(".\\tmpcoom\\" + file[0:-3] + ".txteng")): continue #already translated
+        ssFiles.append(file[0:-3])
+        if(os.path.isfile(".\\tmpcoom\\" + file[0:-3] + ".txt")): continue; #already extracted
+        os.system("tools\\ssdump.exe tmpcoom\\" + file + " tmpcoom\\" + file[0:-3] + ".txt")
 print("DONE")
 
 for file in ssFiles:
@@ -102,7 +104,8 @@ for file in ssFiles:
         output = output + translate(bigString) #fix any stragglers
         #okay now we have a huge output string
         counter = 1;
-        splitOutput = output.replace("\\n", "\n").splitlines()
+        #clean up some weird shit from the translation
+        splitOutput = output.replace("\\n", "\n").replace("\\", "").replace("\"", "").splitlines()
         for line in jpLines:
             #filter out the non translatable text
             if(len(line) == 0): continue;
@@ -115,14 +118,36 @@ for file in ssFiles:
                 enLines.append(line)
                 continue
             pre = line[:7]
-            post = splitOutput[counter]
+            if(len(splitOutput) > 0):
+                post = splitOutput[counter]
+            else:
+                post = "";
             enLines.append(pre + post) #re patch the english onto the original line
             counter = counter + 1
             
-    f = open("tmpcoom\\" + file + ".txt", "w", encoding="utf-8")    
+    f = open("tmpcoom\\" + file + ".txteng", "w", encoding="utf-8")    
     for line in enLines:
         f.write(line)
         f.write("\n")
     f.close()
     
     print("DONE")
+    
+#Time to repack!!
+
+try:
+    os.mkdir("outcoom")
+except OSError as error:
+    pass
+print("Repacking .ss files...", end="")
+for file in os.listdir("tmpcoom\\"):
+    if(file[-1] == 's' and file[-2] == 's' and file[-3] == '.'):
+        os.system("tools\\ssinsert.exe .\\tmpcoom\\" + file[:-3] + ".ss .\\tmpcoom\\" + file[:-3] + ".txteng .\\outcoom\\" + file)
+        print(".", end="", flush=True)
+print("DONE")
+
+print("Cleaning up...", end="")
+#os.system("rd /s /q \\tmpcoom")
+print("DONE")
+
+#fully translated ss files should now be in outcoom
