@@ -3,9 +3,35 @@ import shutil
 import operator
 import requests, uuid, json
 import re
+import time
 
 apiKey = ""
 location = "westus2"
+
+def translate(input):
+    endpoint = "https://api.cognitive.microsofttranslator.com"
+    path = '/translate'
+    constructed_url = endpoint + path
+    params = {
+        'api-version': '3.0',
+        'from': 'ja',
+        'to': 'en'
+    }
+    constructed_url = endpoint + path
+    headers = {
+        'Ocp-Apim-Subscription-Key': apiKey,
+        'Ocp-Apim-Subscription-Region': location,
+        'Content-type': 'application/json',
+        'X-ClientTraceId': str(uuid.uuid4())
+    }
+    body = [{
+        'text': bigString
+    }]
+    request = requests.post(constructed_url, params=params, headers=headers, json=body)
+    response = request.json()
+    output = json.dumps(response, sort_keys=True, ensure_ascii=False, indent=4, separators=(',', ': ')).splitlines()[4].strip()[9:-2]
+    time.sleep(60 * (len(input) / 33000)) #azure limits free tier to 33,000 characters per minute
+    return output
 
 games = list()
 if os.path.isdir("C:\\Program Files (x86)\\Iris"):
@@ -52,11 +78,31 @@ for file in os.listdir("tmpcoom\\"):
 print("DONE")
 
 for file in ssFiles:
-    print("Translating", file, end="")
+    print("Translating", file + "...", end="", flush=True)
     enLines = list()
     with open("tmpcoom\\" + file + ".txt", "r", encoding="utf-8") as f:
         jpLines = f.read().splitlines()
-        counter = 0
+        bigString = ""
+        output = ""
+        for line in jpLines:
+            #filter out the non translatable text
+            if(len(line) == 0): continue;
+            if(len(line) < 7): 
+                continue; #skip anything too short
+            if(line[1] == '/'): continue; #skip comment
+            strippedLine = line[7:]
+            if(re.match("[_/a-zA-Z0-9\s\{\}$]+", strippedLine)): #regex magic to find translatable strings
+                continue
+                
+            bigString = bigString + '\n' + strippedLine
+            if(len(bigString) > 9000): #if we get close to the limit of azure (10,000) then split off the string and translate
+                output = output + translate(bigString)
+                bigString = ""
+                print(".", end="", flush=True)
+        output = output + translate(bigString) #fix any stragglers
+        #okay now we have a huge output string
+        counter = 1;
+        splitOutput = output.replace("\\n", "\n").splitlines()
         for line in jpLines:
             #filter out the non translatable text
             if(len(line) == 0): continue;
@@ -64,40 +110,14 @@ for file in ssFiles:
                 enLines.append(line) #add the short line 
                 continue; #skip anything too short
             if(line[1] == '/'): continue; #skip comment
-            print(line)
             strippedLine = line[7:]
-            if(re.match("^[_/a-zA-Z0-9\s\{\}]+$", strippedLine)): #regex magic to find translatable strings
+            if(re.match("[_/a-zA-Z0-9\s\{\}$]+", strippedLine)): #regex magic to find translatable strings
                 enLines.append(line)
                 continue
-            
-            #send the remaining string to azure cloud
-            endpoint = "https://api.cognitive.microsofttranslator.com"
-            path = '/translate'
-            constructed_url = endpoint + path
-            params = {
-                'api-version': '3.0',
-                'from': 'ja',
-                'to': 'en'
-            }
-            constructed_url = endpoint + path
-            headers = {
-                'Ocp-Apim-Subscription-Key': apiKey,
-                'Ocp-Apim-Subscription-Region': location,
-                'Content-type': 'application/json',
-                'X-ClientTraceId': str(uuid.uuid4())
-            }
-            body = [{
-                'text': strippedLine
-            }]
-            request = requests.post(constructed_url, params=params, headers=headers, json=body)
-            response = request.json()
-            output = json.dumps(response, sort_keys=True, ensure_ascii=False, indent=4, separators=(',', ': ')).splitlines()[4].strip()[9:-2]
-            #write line to enLines
-            
-            enLines.append(line[:7] + output)
+            pre = line[:7]
+            post = splitOutput[counter]
+            enLines.append(pre + post) #re patch the english onto the original line
             counter = counter + 1
-            if operator.mod(100 * counter / len(jpLines), 1) == 0:
-                print(".", end="", flush=True)
             
     f = open("tmpcoom\\" + file + ".txt", "w", encoding="utf-8")    
     for line in enLines:
