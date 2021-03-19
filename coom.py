@@ -8,7 +8,7 @@ import time
 apiKey = ""
 location = "westus2"
 
-def translate(input):
+def translate(inputText):
     endpoint = "https://api.cognitive.microsofttranslator.com"
     path = '/translate'
     constructed_url = endpoint + path
@@ -25,12 +25,17 @@ def translate(input):
         'X-ClientTraceId': str(uuid.uuid4())
     }
     body = [{
-        'text': bigString
+        'text': inputText
     }]
     request = requests.post(constructed_url, params=params, headers=headers, json=body)
     response = request.json()
+    #print(response)
     output = json.dumps(response, sort_keys=True, ensure_ascii=False, indent=4, separators=(',', ': ')).splitlines()[4].strip()[9:-2]
-    time.sleep(60 * (len(input) / 33000)) #azure limits free tier to 33,000 characters per minute
+    #input()
+    
+    #print(output.replace("\\n", "|").split("|"))
+    
+    #time.sleep(60 * (len(inputText) / 33000)) #azure limits free tier to 33,000 characters per minute
     return output
 
 games = list()
@@ -54,6 +59,7 @@ if os.path.isfile("C:\\Program Files (x86)\\" + games[chosenGame][0] + "\\" + ga
 #okay we have our scene.pck, time to copy to working directory and extract
 try:
     os.mkdir("tmpcoom")
+    os.mkdir("outcoom")
 except OSError as error:
     pass
     
@@ -95,35 +101,8 @@ for file in ssFiles:
             strippedLine = line[7:]
             if(re.match("[_/a-zA-Z0-9\s\{\}$]+", strippedLine)): #regex magic to find translatable strings
                 continue
-                
-            bigString = bigString + '\n' + strippedLine
-            if(len(bigString) > 9000): #if we get close to the limit of azure (10,000) then split off the string and translate
-                output = output + translate(bigString)
-                bigString = ""
-                print(".", end="", flush=True)
-        output = output + translate(bigString) #fix any stragglers
-        #okay now we have a huge output string
-        counter = 1;
-        #clean up some weird shit from the translation
-        splitOutput = output.replace("\\n", "\n").replace("\\", "").replace("\"", "").splitlines()
-        for line in jpLines:
-            #filter out the non translatable text
-            if(len(line) == 0): continue;
-            if(len(line) < 7): 
-                enLines.append(line) #add the short line 
-                continue; #skip anything too short
-            if(line[1] == '/'): continue; #skip comment
-            strippedLine = line[7:]
-            if(re.match("[_/a-zA-Z0-9\s\{\}$]+", strippedLine)): #regex magic to find translatable strings
-                enLines.append(line)
-                continue
-            pre = line[:7]
-            if(len(splitOutput) > 0):
-                post = splitOutput[counter]
-            else:
-                post = "";
-            enLines.append(pre + post) #re patch the english onto the original line
-            counter = counter + 1
+            enLines.append(translate(strippedLine))
+            print(".", end="", flush=True)
             
     f = open("tmpcoom\\" + file + ".txteng", "w", encoding="utf-8")    
     for line in enLines:
@@ -131,20 +110,11 @@ for file in ssFiles:
         f.write("\n")
     f.close()
     
+    os.system("tools\\ssinsert.exe .\\tmpcoom\\" + file + ".ss .\\tmpcoom\\" + file + ".txteng .\\outcoom\\" + file + ".ss")
+    
     print("DONE")
     
 #Time to repack!!
-
-try:
-    os.mkdir("outcoom")
-except OSError as error:
-    pass
-print("Repacking .ss files...", end="")
-for file in os.listdir("tmpcoom\\"):
-    if(file[-1] == 's' and file[-2] == 's' and file[-3] == '.'):
-        os.system("tools\\ssinsert.exe .\\tmpcoom\\" + file[:-3] + ".ss .\\tmpcoom\\" + file[:-3] + ".txteng .\\outcoom\\" + file)
-        print(".", end="", flush=True)
-print("DONE")
 
 print("Cleaning up...", end="")
 #os.system("rd /s /q \\tmpcoom")
